@@ -35,9 +35,12 @@ DISASM ?= -x
 # Run usertests or usershell
 TEST ?=
 
-build: env $(KERNEL_BIN) fs-img 
+user_build:
+	cd ../user/ && make build
 
-env:
+build: env $(KERNEL_BIN) fs-img
+
+env:user_build
 	(rustup target list | grep "riscv64gc-unknown-none-elf (installed)") || rustup target add $(TARGET)
 	cargo install cargo-binutils
 	rustup component add rust-src

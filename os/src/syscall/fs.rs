@@ -1,8 +1,9 @@
 use alloc::string::ToString;
-use crate::fs::{File, FileDescriptor, make_pipe, open_file, OpenFlags};
-use crate::mm::{translated_byte_buffer, translated_refmut, translated_str, UserBuffer};
+use crate::fs::{File, FileDescriptor, Kstat, make_pipe, open_file, OpenFlags};
+use crate::mm::{translated_byte_buffer, translated_bytes, translated_refmut, translated_str, UserBuffer};
 use crate::task::{current_process, current_user_token};
 use alloc::sync::Arc;
+use core::mem::size_of;
 
 pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize {
     let token = current_user_token();
@@ -84,12 +85,10 @@ pub fn sys_open(fd:isize, path: *const u8, flags: u32) -> isize {
     } else {
         -1
     }
-
-
-
 }
 
 pub fn sys_close(fd: usize) -> isize {
+    println!("Enter close");
     let process = current_process();
     let mut inner = process.inner_exclusive_access();
     if fd >= inner.fd_table.len() {
@@ -128,4 +127,76 @@ pub fn sys_dup(fd: usize) -> isize {
     let new_fd = inner.alloc_fd();
     inner.fd_table[new_fd] = Some(inner.fd_table[fd].as_ref().unwrap().clone());
     new_fd as isize
+}
+pub fn sys_chdir(path: *const u8) -> isize {
+    let token = current_user_token();
+    let process = current_process();
+    let mut inner = process.inner_exclusive_access();
+    let path = translated_str(token, path).replace("./", "");
+    let inode = inner
+        .work_dir
+        .as_ref()
+        .open(&path, true, true, true);
+    match inode {
+        Some(file) => {
+            inner.work_dir = Arc::new(FileDescriptor::File (file));
+            0
+        }
+        None => 1,
+    }
+}
+pub fn sys_getcwd(buf: *const u8, size: usize) -> isize{
+    let token = current_user_token();
+    let process = current_process();
+    let inner = process.inner_exclusive_access();
+    let name = inner.work_dir.name().clone();
+    let dir = name.as_bytes();
+    for b in UserBuffer::new(translated_byte_buffer(token, buf, size)).buffers {
+        b[0..dir.len()].copy_from_slice(dir);
+    }
+    1
+}
+pub fn sys_dup3(old_fd:isize, new_fd:isize) -> isize{
+    -1
+}
+//未实现组机制，没有mode
+pub fn sys_mkdirat(dirfd:isize, path:*const u8, _mode:isize) -> isize {
+    let token = current_user_token();
+    let process = current_process();
+    let mut inner = process.inner_exclusive_access();
+    let path_ = translated_str(token, path).replace("./", "");   //是相对路经时才会更改
+    let dir = if dirfd >= 0 {
+        if let Some(dir) = inner.fd_table.get(dirfd as usize).unwrap() {
+            dir
+        } else {
+            return -1;
+        }
+    } else {
+        &inner.work_dir
+    };
+    if let Some(file) = dir.create(&path_, false, false, true) {
+        let fd = inner.alloc_fd();
+        inner.fd_table.insert(fd, Some(FileDescriptor::File(file)));
+        fd as isize
+    } else {
+        -1
+    }
+
+}
+
+pub fn sys_fstat(fd: isize, ptr: *const u8) -> isize {
+    let token = current_user_token();
+    let mut user_buf = UserBuffer::new(translated_byte_buffer(token, ptr, core::mem::size_of::<Kstat>()));
+    let process = current_process();
+    let inner = process.inner_exclusive_access();
+    if let Some(opt) = inner.fd_table.get(fd as usize) {
+        if let Some(file) = opt {
+            let mut stat = Kstat::default();
+            file.kstat(&mut stat);
+            user_buf.write(translated_bytes(&stat,size_of::<Kstat>()));
+            // println!("{:?}",stat);
+            return 0;
+        }
+    }
+    1
 }

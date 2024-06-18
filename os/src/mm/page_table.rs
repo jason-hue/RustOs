@@ -210,6 +210,21 @@ impl UserBuffer {
         }
         total
     }
+    pub fn write(&mut self, buff: &[u8])->usize{
+        let len = core::cmp::min(self.len(), buff.len());
+        let mut current = 0;
+        for sub_buff in self.buffers.iter_mut() {
+            let sblen = (*sub_buff).len();
+            for j in 0..sblen {
+                (*sub_buff)[j] = buff[current];
+                current += 1;
+                if current == len {
+                    return len;
+                }
+            }
+        }
+        return len;
+    }
 }
 
 impl IntoIterator for UserBuffer {
@@ -245,5 +260,14 @@ impl Iterator for UserBufferIterator {
             }
             Some(r)
         }
+    }
+}
+pub fn translated_bytes<'a, T>(ptr: &T,len: usize) -> &'a [u8] {
+    unsafe {
+        let ptr = ptr as *const _ as *const u8;
+        core::slice::from_raw_parts(
+            ptr,
+            len
+        )
     }
 }

@@ -22,6 +22,7 @@ binary: elf
 	@$(foreach elf, $(ELFS), $(OBJCOPY) $(elf) --strip-all -O binary $(patsubst $(TARGET_DIR)/%, $(TARGET_DIR)/%.bin, $(elf));)
 
 build: binary
+	cp target/riscv64gc-unknown-none-elf/release/initproc ../os/src/
 
 clean:
 	@cargo clean

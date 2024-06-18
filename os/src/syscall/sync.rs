@@ -1,13 +1,35 @@
 use crate::sync::{Condvar, Mutex, MutexBlocking, MutexSpin, Semaphore};
-use crate::task::{block_current_and_run_next, current_process, current_task};
-use crate::timer::{add_timer, get_time_ms};
+use crate::task::{block_current_and_run_next, current_process, current_task, current_user_token, suspend_current_and_run_next};
+use crate::timer::{add_timer, get_time_ms, get_time_us, USEC_PER_SEC};
 use alloc::sync::Arc;
+use crate::mm::{translated_ref, translated_refmut};
 
-pub fn sys_sleep(ms: usize) -> isize {
-    let expire_ms = get_time_ms() + ms;
-    let task = current_task().unwrap();
-    add_timer(expire_ms, task);
-    block_current_and_run_next();
+// pub fn sys_sleep(ms: usize) -> isize {
+//     let expire_ms = get_time_ms() + ms;
+//     let task = current_task().unwrap();
+//     add_timer(expire_ms, task);
+//     block_current_and_run_next();
+//     0
+// }
+pub fn sys_sleep(req: *const usize, rem: *mut usize) -> isize {
+    let token = current_user_token();
+    let sec = *translated_ref(token, req) as usize;
+    let usec = *translated_ref(token, unsafe { req.add(1) }) as usize;
+    // 按照总的us数来算
+    let end_usec = get_time_us() + sec * USEC_PER_SEC + usec;
+    println!("now_usec: {:}, end_usec: {:}", end_usec - sec * USEC_PER_SEC - usec, end_usec);
+    loop {
+        let now_usec = get_time_us();
+        if now_usec >= end_usec {
+            break;
+        } else {
+            suspend_current_and_run_next();
+        }
+    }
+    if rem as usize != 0 {
+        *translated_refmut(token, rem) = 0;
+        *translated_refmut(token, unsafe { rem.add(1) }) = 0;
+    }
     0
 }
 
