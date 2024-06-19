@@ -26,7 +26,7 @@ mod syscall;
 mod task;
 mod timer;
 mod trap;
-
+mod ext4fs;
 use core::arch::global_asm;
 
 global_asm!(include_str!("entry.asm"));

@@ -19,6 +19,5 @@ sbi-rt = { version = "0.0.2", features = ["legacy"] }
 k210-pac = { path = "../dependencies/k210-pac" }
 k210-hal = { path = "../dependencies/k210-hal" }
 k210-soc = { path = "../dependencies/k210-soc" }
-
 [profile.release]
 debug = true
