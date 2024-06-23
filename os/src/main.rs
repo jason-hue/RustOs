@@ -27,7 +27,9 @@ mod task;
 mod timer;
 mod trap;
 mod ext4fs;
+mod ext4fs_interface;
 use core::arch::global_asm;
+use crate::ext4fs_interface::init_dt;
 
 global_asm!(include_str!("entry.asm"));
 
@@ -43,7 +45,7 @@ fn clear_bss() {
 }
 
 #[no_mangle]
-pub fn rust_main() -> ! {
+pub fn rust_main(device_tree_paddr: usize) -> ! {
     clear_bss();
     println!("[kernel] Hello, world!");
     mm::init();
@@ -51,6 +53,7 @@ pub fn rust_main() -> ! {
     trap::init();
     trap::enable_timer_interrupt();
     timer::set_next_trigger();
+    init_dt(device_tree_paddr);
     fatfs::fs_init();
     task::add_initproc();
     task::run_tasks();
