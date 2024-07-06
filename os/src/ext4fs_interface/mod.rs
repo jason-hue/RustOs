@@ -1,23 +1,24 @@
 use alloc::boxed::Box;
 use device_tree::{DeviceTree, Node};
 use device_tree::util::SliceRead;
-use log::{info, warn};
+use log::{error, warn};
 use lwext4_rust::InodeTypes;
 use virtio_drivers_fs::device::blk::VirtIOBlk;
 use virtio_drivers_fs::transport::{DeviceType, Transport};
 use virtio_drivers_fs::transport::mmio::{MmioTransport, VirtIOHeader};
-use crate::drivers::BLOCK_DEVICE;
 use crate::ext4fs_interface::disk::Disk;
 use crate::ext4fs_interface::ext4fs::{Ext4FileSystem, FileWrapper};
 use crate::ext4fs_interface::vfs_ops::{VfsNodeOps, VfsOps};
 use crate::ext4fs_interface::virtio_impls::HalImpl;
+use crate::mm::{translated_pa_to_va, translated_va_to_pa};
+use crate::task::current_user_token;
 
 mod disk;
 mod ext4fs;
 mod vfs_ops;
 mod virtio_impls;
 pub fn init_dt(dtb: usize) {
-    info!("device tree @ {:#x}", dtb);
+    println!("device tree @ {:#x}", dtb);
     #[repr(C)]
     struct DtbHeader {
         be_magic: u32,
@@ -46,14 +47,14 @@ fn walk_dt_node(dt: &Node) {
                 let address_cells = dt.prop_u32("#address-cells").unwrap_or(0) as usize;
                 let size_cells = dt.prop_u32("#size-cells").unwrap_or(0) as usize;
                 let ranges = dt.prop_cells("ranges").unwrap();
-                info!(
+                println!(
                     "pci ranges: bus_addr@[{:x?}], cpu_paddr@[{:x?}], size@[{:x?}]",
                     ranges[0]..ranges[address_cells - 1],
                     ranges[address_cells]..ranges[address_cells + 2 - 1],
                     ranges[address_cells + 2]..ranges[address_cells + 2 + size_cells - 1]
                 );
 
-                info!("{:?} addr={:#x}, size={:#x}", compatible, paddr, size);
+                println!("{:?} addr={:#x}, size={:#x}", compatible, paddr, size);
                 //pci_scan().unwrap();
             }
         }
@@ -65,7 +66,6 @@ fn walk_dt_node(dt: &Node) {
                     .as_slice()
                     .read_be_u64(2 * core::mem::size_of::<u32>())
                     .unwrap_or(0);
-
                 virtio_probe(paddr, size);
             }
         }
@@ -75,14 +75,13 @@ fn walk_dt_node(dt: &Node) {
     }
 }
 fn virtio_probe(paddr: u64, size: u64) {
+    println!("walk dt addr={:#x}, size={:#x}", paddr, size);
     let vaddr = paddr;
-    info!("walk dt addr={:#x}, size={:#x}", paddr, size);
-
     let header = core::ptr::NonNull::new(vaddr as *mut VirtIOHeader).unwrap();
     match unsafe { MmioTransport::new(header) } {
         Err(e) => warn!("Construct a new VirtIO MMIO transport: {}", e),
         Ok(transport) => {
-            info!(
+            println!(
                 "Detected virtio MMIO device with vendor id {:#X}, device type {:?}, version {:?}",
                 transport.vendor_id(),
                 transport.device_type(),
@@ -95,10 +94,10 @@ fn virtio_probe(paddr: u64, size: u64) {
 fn virtio_device(transport: impl Transport) {
     match transport.device_type() {
         DeviceType::Block => virtio_blk(transport),
-        DeviceType::GPU => info!("VirtIO GPU"),
-        DeviceType::Input => info!("VirtIO Input"),
-        DeviceType::Network => info!("VirtIO Network"),
-        t => warn!("Unrecognized virtio device: {:?}", t),
+        DeviceType::GPU => println!("VirtIO GPU"),
+        DeviceType::Input => println!("VirtIO Input"),
+        DeviceType::Network => println!("VirtIO Network"),
+        t => error!("Unrecognized virtio device: {:?}", t),
     }
 }
 fn virtio_blk<T: Transport>(transport: T) {
@@ -106,7 +105,7 @@ fn virtio_blk<T: Transport>(transport: T) {
 
     init_rootfs(blk);
 
-    info!("virtio-blk test finished");
+    println!("virtio-blk test finished");
 }
 
 pub fn init_rootfs<T: Transport>(dev: VirtIOBlk<HalImpl, T>) {
@@ -133,4 +132,17 @@ pub fn init_rootfs<T: Transport>(dev: VirtIOBlk<HalImpl, T>) {
     assert_eq!(write_buf, read_buf);
 
     drop(ext4_fs);
+}
+pub fn parse_dtb_size(dtb: usize) -> u32 {
+    #[repr(C)]
+    struct DtbHeader {
+        be_magic: u32,
+        be_size: u32,
+    }
+    let header = unsafe { &*(dtb as *const DtbHeader) };
+    let magic = u32::from_be(header.be_magic);
+    const DEVICE_TREE_MAGIC: u32 = 0xd00dfeed;
+    assert_eq!(magic, DEVICE_TREE_MAGIC);
+    let size = u32::from_be(header.be_size);
+    size
 }

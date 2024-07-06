@@ -14,7 +14,7 @@ use virtio_drivers_fs::{
     Hal,
 };
 /// A disk device with a cursor.
-pub struct Disk<H: Hal, T: Transport> {
+pub struct  Disk<H: Hal, T: Transport> {
     block_id: usize,
     offset: usize,
     dev: VirtIOBlk<H, T>,
@@ -64,7 +64,7 @@ impl<H: Hal, T: Transport> Disk<H, T> {
             let start = self.offset;
             let count = buf.len().min(BLOCK_SIZE - self.offset);
             if start > BLOCK_SIZE {
-                info!("block size: {} start {}", BLOCK_SIZE, start);
+                println!("block size: {} start {}", BLOCK_SIZE, start);
             }
 
             self.dev
@@ -125,7 +125,7 @@ impl<H: Hal, T: Transport> KernelDevOp for Disk<H, T> {
     type DevType = Self;
 
     fn read(dev: &mut Self, mut buf: &mut [u8]) -> Result<usize, i32> {
-        debug!("READ block device buf={}", buf.len());
+        println!("READ block device buf={}", buf.len());
         let mut read_len = 0;
         while !buf.is_empty() {
             match dev.read_one(buf) {
@@ -142,7 +142,7 @@ impl<H: Hal, T: Transport> KernelDevOp for Disk<H, T> {
         Ok(read_len)
     }
     fn write(dev: &mut Self, mut buf: &[u8]) -> Result<usize, i32> {
-        debug!("WRITE block device buf={}", buf.len());
+        println!("WRITE block device buf={}", buf.len());
         let mut write_len = 0;
         while !buf.is_empty() {
             match dev.write_one(buf) {
@@ -154,7 +154,7 @@ impl<H: Hal, T: Transport> KernelDevOp for Disk<H, T> {
                 Err(_e) => return Err(-1),
             }
         }
-        debug!("WRITE rt len={}", write_len);
+        println!("WRITE rt len={}", write_len);
         Ok(write_len)
     }
     fn flush(dev: &mut Self::DevType) -> Result<usize, i32> {
@@ -163,7 +163,7 @@ impl<H: Hal, T: Transport> KernelDevOp for Disk<H, T> {
     }
     fn seek(dev: &mut Self, off: i64, whence: i32) -> Result<i64, i32> {
         let size = dev.size();
-        debug!(
+        println!(
             "SEEK block device size:{}, pos:{}, offset={}, whence={}",
             size,
             &dev.position(),

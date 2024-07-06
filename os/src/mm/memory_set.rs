@@ -151,6 +151,9 @@ impl MemorySet {
         );
         println!("mapping memory-mapped registers");
         for pair in MMIO {
+            let start = (*pair).0;
+            let end = start + (*pair).1;
+            println!("Mapping: {:#x} - {:#x}", start, end);
             memory_set.push(
                 MapArea::new(
                     (*pair).0.into(),
@@ -241,6 +244,12 @@ impl MemorySet {
     pub fn recycle_data_pages(&mut self) {
         //*self = Self::new_bare();
         self.areas.clear();
+    }
+    pub fn get_page_table(&self) -> &PageTable {
+        &self.page_table
+    }
+    pub fn get_areas(&self) -> &Vec<MapArea> {
+        &self.areas
     }
 }
 
