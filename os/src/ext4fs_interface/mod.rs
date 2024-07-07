@@ -133,7 +133,7 @@ pub fn init_rootfs<T: Transport>(dev: VirtIOBlk<HalImpl, T>) {
     // println!("read file = {:#x?}", read_buf);
     // assert_eq!(write_buf, read_buf);
 
-    let file_path = "/busybox";
+    let file_path = "/sample.txt";
 
     // 打开已经存在的文件
     let mut file_fd: Box<dyn VfsNodeOps> =
@@ -148,10 +148,10 @@ pub fn init_rootfs<T: Transport>(dev: VirtIOBlk<HalImpl, T>) {
     // println!("read file = {:#x?}", read_buf);
     // 定义块大小
     const CHUNK_SIZE: usize = 4096; // 4KB
-
     // 用于存储读取的总字节数
     let mut total_read = 0;
-
+    // 总缓冲区
+    let mut total_buffer = Vec::with_capacity(file_size as usize);
     // 用于存储前几个字节（用于验证）
     let mut first_bytes = Vec::new();
 
@@ -168,7 +168,8 @@ pub fn init_rootfs<T: Transport>(dev: VirtIOBlk<HalImpl, T>) {
             Ok(bytes_read) => {
                 // 更新已读取的总字节数
                 total_read += bytes_read;
-
+                // 将读取的数据追加到总缓冲区
+                total_buffer.extend_from_slice(&buffer[..bytes_read]);
                 // 如果这是第一块，保存前几个字节用于验证
                 if first_bytes.is_empty() && bytes_read > 0 {
                     first_bytes = buffer[..bytes_read.min(16)].to_vec(); // 保存最多16个字节
@@ -176,7 +177,6 @@ pub fn init_rootfs<T: Transport>(dev: VirtIOBlk<HalImpl, T>) {
 
                 // 这里可以处理读取的数据
                 println!("{} bytes were read, out of a total of {} bytes read", bytes_read, total_read);
-
                 // 如果读取的字节数小于请求的字节数，说明已经到达文件末尾
                 if bytes_read < bytes_to_read {
                     break;
@@ -191,7 +191,17 @@ pub fn init_rootfs<T: Transport>(dev: VirtIOBlk<HalImpl, T>) {
 
     println!("The file is read completely, with a total of {} bytes read", total_read);
     println!("The  {} bytes Of the file: {:?}", first_bytes.len(), first_bytes);
-
+    // 打印所有读取的数据
+    println!("The content of the file:");
+    for (i, byte) in total_buffer.iter().enumerate() {
+        print!("{:02x} ", byte);
+        if (i + 1) % 16 == 0 {
+            println!("");
+        }
+    }
+    if total_buffer.len() % 16 != 0 {
+        println!("");
+    }
     drop(ext4_fs);
 }
 
