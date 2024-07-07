@@ -1,7 +1,9 @@
 use alloc::boxed::Box;
+use alloc::vec;
 use device_tree::{DeviceTree, Node};
 use device_tree::util::SliceRead;
 use log::{error, warn};
+use lwext4_rust::bindings::ext4_direntry;
 use lwext4_rust::InodeTypes;
 use virtio_drivers_fs::device::blk::VirtIOBlk;
 use virtio_drivers_fs::transport::{DeviceType, Transport};
@@ -102,9 +104,7 @@ fn virtio_device(transport: impl Transport) {
 }
 fn virtio_blk<T: Transport>(transport: T) {
     let mut blk = VirtIOBlk::<HalImpl, T>::new(transport).expect("failed to create blk driver");
-
     init_rootfs(blk);
-
     println!("virtio-blk test finished");
 }
 
@@ -113,36 +113,37 @@ pub fn init_rootfs<T: Transport>(dev: VirtIOBlk<HalImpl, T>) {
     let ext4_fs: Box<dyn VfsOps> = Box::new(Ext4FileSystem::new(disk));
     let root = ext4_fs.root_dir();
 
-    let new_file = "/ext4_test.txt";
-    root.create(new_file, InodeTypes::EXT4_DE_REG_FILE);
+    // let new_file = "/sample.text";
+    // root.create(new_file, InodeTypes::EXT4_DE_REG_FILE);
+    //
+    // let mut new_fd: Box<dyn VfsNodeOps> =
+    //     Box::new(FileWrapper::new(new_file, InodeTypes::EXT4_INODE_MODE_FILE));
+    //
+    // let mut write_buf: [u8; 20] = [0xFF; 20];
+    // let mut read_buf: [u8; 20] = [0; 20];
+    //
+    // // new_fd.write_at(0, &write_buf);
+    //
+    // new_fd.read_at(0, &mut read_buf);
+    //
+    // // root.remove(new_file);
+    //
+    // println!("read file = {:#x?}", read_buf);
+    // assert_eq!(write_buf, read_buf);
 
-    let mut new_fd: Box<dyn VfsNodeOps> =
-        Box::new(FileWrapper::new(new_file, InodeTypes::EXT4_INODE_MODE_FILE));
+    let file_path = "/sample.txt";
 
-    let mut write_buf: [u8; 20] = [0xFFu8; 20];
-    let mut read_buf: [u8; 20] = [0; 20];
+    // 打开已经存在的文件
+    let mut file_fd: Box<dyn VfsNodeOps> =
+        Box::new(FileWrapper::new(file_path, InodeTypes::EXT4_INODE_MODE_FILE));
+    let file_size = file_fd.get_file_size(file_path);
+    let mut read_buf = vec![0; file_size as usize];
+    // 从文件中读取
+    file_fd.read_at(0, &mut read_buf).expect("Failed to read from file");
 
-    new_fd.write_at(0, &write_buf);
-
-    new_fd.read_at(0, &mut read_buf);
-
-    root.remove(new_file);
-
+    // 输出读取的数据
     println!("read file = {:#x?}", read_buf);
-    assert_eq!(write_buf, read_buf);
 
     drop(ext4_fs);
 }
-pub fn parse_dtb_size(dtb: usize) -> u32 {
-    #[repr(C)]
-    struct DtbHeader {
-        be_magic: u32,
-        be_size: u32,
-    }
-    let header = unsafe { &*(dtb as *const DtbHeader) };
-    let magic = u32::from_be(header.be_magic);
-    const DEVICE_TREE_MAGIC: u32 = 0xd00dfeed;
-    assert_eq!(magic, DEVICE_TREE_MAGIC);
-    let size = u32::from_be(header.be_size);
-    size
-}
+

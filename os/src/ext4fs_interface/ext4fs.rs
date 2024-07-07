@@ -1,4 +1,4 @@
-use core::cell::RefCell;
+use core::cell::{RefCell, RefMut};
 
 use crate::alloc::string::String;
 use crate::ext4fs_interface::disk::Disk;
@@ -8,7 +8,7 @@ use log::*;
 use lwext4_rust::bindings::{
     O_APPEND, O_CREAT, O_RDONLY, O_RDWR, O_TRUNC, O_WRONLY, SEEK_CUR, SEEK_END, SEEK_SET,
 };
-use lwext4_rust::{Ext4BlockWrapper, Ext4File, InodeTypes, KernelDevOp};
+use lwext4_rust::{Ext4BlockWrapper, Ext4File, file, InodeTypes, KernelDevOp};
 use virtio_drivers_fs::transport::Transport;
 use virtio_drivers_fs::Hal;
 
@@ -55,6 +55,15 @@ pub struct FileWrapper(RefCell<Ext4File>);
 unsafe impl Send for FileWrapper {}
 unsafe impl Sync for FileWrapper {}
 
+#[derive(Debug)]
+pub enum OpenFlags {
+    O_RDONLY = 0,
+    O_WRONLY = 0x1,
+    O_RDWR = 0x2,
+    O_CREAT = 0x40,
+    O_TRUNC = 0x200,
+    O_APPEND = 0x400,
+}
 impl FileWrapper {
     pub fn new(path: &str, types: InodeTypes) -> Self {
         info!("FileWrapper new {:?} {}", types, path);
@@ -62,7 +71,6 @@ impl FileWrapper {
 
         Self(RefCell::new(Ext4File::new(path, types)))
     }
-
     fn path_deal_with(&self, path: &str) -> String {
         if path.starts_with('/') {
             warn!("path_deal_with: {}", path);
@@ -93,7 +101,13 @@ impl FileWrapper {
 
 /// The [`VfsNodeOps`] trait provides operations on a file or a directory.
 impl VfsNodeOps for FileWrapper {
-
+    fn get_file_size(&self,path: &str) -> u64 {
+        let mut file = self.0.borrow_mut();
+        file.file_open(path,OpenFlags::O_RDONLY as u32);
+        let file_size = file.file_size();
+        println!("file_size={}",file_size);
+        file_size
+    }
     /*
     fn get_attr(&self) -> Result<usize, i32> {
         let mut file = self.0.lock();

@@ -8,7 +8,7 @@ FS_IMG := ../user/target/$(TARGET)/$(MODE)/fs.img
 APPS := ../user/src/bin/*
 
 #FS
-FAT_IMG := ../fat.img
+FAT_IMG := ../ext4.img
 ELF_SRC := ../testsuits/
 SDC := ../SDCard/
 

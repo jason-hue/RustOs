@@ -29,6 +29,11 @@ pub trait VfsOps: Send + Sync {
 
 /// Node (file/directory) operations.
 pub trait VfsNodeOps: Send + Sync {
+
+    fn get_file_size(&self,path: &str)->u64{
+        0
+    }
+
     /// Do something when the node is opened.
     fn open(&self) -> Result<usize, i32> {
         Ok(0)
