@@ -30,6 +30,7 @@ mod ext4fs_interface;
 use core::arch::global_asm;
 use crate::ext4fs_interface::init_dt;
 use crate::mm::{ kernel_token, translated_pa_to_va};
+use crate::sbi::shutdown;
 use crate::task::current_user_token;
 
 global_asm!(include_str!("entry.asm"));
@@ -57,8 +58,9 @@ pub fn rust_main(device_tree_paddr: usize) -> ! {
     timer::set_next_trigger();
     println!("TDB_addr: {:#x}",dtb_addr);
     init_dt(dtb_addr);
-    fatfs::fs_init();
-    task::add_initproc();
-    task::run_tasks();
+    shutdown(false);
+    // fatfs::fs_init();
+    // task::add_initproc();
+    // task::run_tasks();
     panic!("Unreachable in rust_main!");
 }

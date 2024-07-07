@@ -1,5 +1,6 @@
 use alloc::sync::Arc;
 use lwext4_rust::{bindings::ext4_direntry, InodeTypes};
+use crate::ext4fs_interface::ext4fs::OpenFlags;
 
 /// Filesystem operations.
 pub trait VfsOps: Send + Sync {
@@ -29,6 +30,9 @@ pub trait VfsOps: Send + Sync {
 
 /// Node (file/directory) operations.
 pub trait VfsNodeOps: Send + Sync {
+
+    fn open_file(&self,path: &str,flag: OpenFlags){
+    }
 
     fn get_file_size(&self,path: &str)->u64{
         0

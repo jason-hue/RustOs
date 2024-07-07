@@ -101,11 +101,15 @@ impl FileWrapper {
 
 /// The [`VfsNodeOps`] trait provides operations on a file or a directory.
 impl VfsNodeOps for FileWrapper {
+    fn open_file(&self, path: &str, flag: OpenFlags) {
+        let mut file = self.0.borrow_mut();
+        file.file_open(path,flag as u32);
+    }
+
     fn get_file_size(&self,path: &str) -> u64 {
         let mut file = self.0.borrow_mut();
         file.file_open(path,OpenFlags::O_RDONLY as u32);
         let file_size = file.file_size();
-        println!("file_size={}",file_size);
         file_size
     }
     /*

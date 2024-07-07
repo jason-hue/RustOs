@@ -1,5 +1,6 @@
 use alloc::boxed::Box;
 use alloc::vec;
+use alloc::vec::Vec;
 use device_tree::{DeviceTree, Node};
 use device_tree::util::SliceRead;
 use log::{error, warn};
@@ -9,7 +10,8 @@ use virtio_drivers_fs::device::blk::VirtIOBlk;
 use virtio_drivers_fs::transport::{DeviceType, Transport};
 use virtio_drivers_fs::transport::mmio::{MmioTransport, VirtIOHeader};
 use crate::ext4fs_interface::disk::Disk;
-use crate::ext4fs_interface::ext4fs::{Ext4FileSystem, FileWrapper};
+use crate::ext4fs_interface::ext4fs::{Ext4FileSystem, FileWrapper, OpenFlags};
+use crate::ext4fs_interface::ext4fs::OpenFlags::O_RDONLY;
 use crate::ext4fs_interface::vfs_ops::{VfsNodeOps, VfsOps};
 use crate::ext4fs_interface::virtio_impls::HalImpl;
 use crate::mm::{translated_pa_to_va, translated_va_to_pa};
@@ -131,18 +133,64 @@ pub fn init_rootfs<T: Transport>(dev: VirtIOBlk<HalImpl, T>) {
     // println!("read file = {:#x?}", read_buf);
     // assert_eq!(write_buf, read_buf);
 
-    let file_path = "/sample.txt";
+    let file_path = "/busybox";
 
     // 打开已经存在的文件
     let mut file_fd: Box<dyn VfsNodeOps> =
         Box::new(FileWrapper::new(file_path, InodeTypes::EXT4_INODE_MODE_FILE));
     let file_size = file_fd.get_file_size(file_path);
-    let mut read_buf = vec![0; file_size as usize];
-    // 从文件中读取
-    file_fd.read_at(0, &mut read_buf).expect("Failed to read from file");
+    println!("file_size={}",file_size);
+    // let mut read_buf = vec![0; file_size as usize];
+    // // 从文件中读取
+    // file_fd.read_at(0, &mut read_buf).expect("Failed to read from file");
+    //
+    // // 输出读取的数据
+    // println!("read file = {:#x?}", read_buf);
+    // 定义块大小
+    const CHUNK_SIZE: usize = 4096; // 4KB
 
-    // 输出读取的数据
-    println!("read file = {:#x?}", read_buf);
+    // 用于存储读取的总字节数
+    let mut total_read = 0;
+
+    // 用于存储前几个字节（用于验证）
+    let mut first_bytes = Vec::new();
+
+    // 分块读取
+    while total_read < file_size as usize {
+        // 计算这次应该读取的字节数
+        let bytes_to_read = CHUNK_SIZE.min(file_size as usize - total_read);
+
+        // 创建一个缓冲区来存储这次读取的数据
+        let mut buffer = vec![0u8; bytes_to_read];
+
+        // 读取数据
+        match file_fd.read_at(total_read as u64, &mut buffer) {
+            Ok(bytes_read) => {
+                // 更新已读取的总字节数
+                total_read += bytes_read;
+
+                // 如果这是第一块，保存前几个字节用于验证
+                if first_bytes.is_empty() && bytes_read > 0 {
+                    first_bytes = buffer[..bytes_read.min(16)].to_vec(); // 保存最多16个字节
+                }
+
+                // 这里可以处理读取的数据
+                println!("{} bytes were read, out of a total of {} bytes read", bytes_read, total_read);
+
+                // 如果读取的字节数小于请求的字节数，说明已经到达文件末尾
+                if bytes_read < bytes_to_read {
+                    break;
+                }
+            },
+            Err(e) => {
+                println!("An error occurred while reading the file: {:?}", e);
+                break;
+            }
+        }
+    }
+
+    println!("The file is read completely, with a total of {} bytes read", total_read);
+    println!("The  {} bytes Of the file: {:?}", first_bytes.len(), first_bytes);
 
     drop(ext4_fs);
 }
