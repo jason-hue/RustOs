@@ -101,14 +101,19 @@ impl FileWrapper {
 
 /// The [`VfsNodeOps`] trait provides operations on a file or a directory.
 impl VfsNodeOps for FileWrapper {
+    fn get_path(&self) -> String {
+        let file = self.0.borrow_mut();
+        let path = file.get_path();
+        let path = path.to_str().unwrap();
+        String::from(path)
+    }
     fn open_file(&self, path: &str, flag: OpenFlags) {
         let mut file = self.0.borrow_mut();
         file.file_open(path,flag as u32);
     }
-
-    fn get_file_size(&self,path: &str) -> u64 {
+    //先open再get_file_size
+    fn get_file_size(&self) -> u64 {
         let mut file = self.0.borrow_mut();
-        file.file_open(path,OpenFlags::O_RDONLY as u32);
         let file_size = file.file_size();
         file_size
     }
@@ -251,11 +256,13 @@ impl VfsNodeOps for FileWrapper {
         Ok(dirents.len())
     }
 
+     */
+
     /// Lookup the node with given `path` in the directory.
     /// Return the node if found.
-    fn lookup(self: Arc<Self>, path: &str) -> Result<usize, i32> {
-        info!("lookup ext4fs: {:?}, {}", self.0.get_path(), path);
-
+    fn lookup(self: Arc<Self>, path: &str) -> Result<Arc<FileWrapper>, &str> {
+        let file = self.clone();
+        println!("lookup ext4fs: {:?}, {}", file.get_path(), path);
         let fpath = self.path_deal_with(path);
         let fpath = fpath.as_str();
         if fpath.is_empty() {
@@ -263,7 +270,7 @@ impl VfsNodeOps for FileWrapper {
         }
 
         /////////
-        let mut file = self.0;
+        let mut file = self.0.borrow_mut();
         if file.check_inode_exist(fpath, InodeTypes::EXT4_DE_DIR) {
             debug!("lookup new DIR FileWrapper");
             Ok(Arc::new(Self::new(fpath, InodeTypes::EXT4_DE_DIR)))
@@ -271,10 +278,10 @@ impl VfsNodeOps for FileWrapper {
             debug!("lookup new FILE FileWrapper");
             Ok(Arc::new(Self::new(fpath, InodeTypes::EXT4_DE_REG_FILE)))
         } else {
-            Err(VfsError::NotFound)
+            Err("Not found")
         }
     }
-    */
+
 
     fn read_at(&self, offset: u64, buf: &mut [u8]) -> Result<usize, i32> {
         debug!("To read_at {}, buf len={}", offset, buf.len());

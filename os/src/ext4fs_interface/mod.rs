@@ -114,38 +114,16 @@ pub fn init_rootfs<T: Transport>(dev: VirtIOBlk<HalImpl, T>) {
     let disk = Disk::new(dev);
     let ext4_fs: Box<dyn VfsOps> = Box::new(Ext4FileSystem::new(disk));
     let root = ext4_fs.root_dir();
-
-    // let new_file = "/sample.text";
-    // root.create(new_file, InodeTypes::EXT4_DE_REG_FILE);
-    //
-    // let mut new_fd: Box<dyn VfsNodeOps> =
-    //     Box::new(FileWrapper::new(new_file, InodeTypes::EXT4_INODE_MODE_FILE));
-    //
-    // let mut write_buf: [u8; 20] = [0xFF; 20];
-    // let mut read_buf: [u8; 20] = [0; 20];
-    //
-    // // new_fd.write_at(0, &write_buf);
-    //
-    // new_fd.read_at(0, &mut read_buf);
-    //
-    // // root.remove(new_file);
-    //
-    // println!("read file = {:#x?}", read_buf);
-    // assert_eq!(write_buf, read_buf);
-
     let file_path = "/sample.txt";
-
     // 打开已经存在的文件
-    let mut file_fd: Box<dyn VfsNodeOps> =
-        Box::new(FileWrapper::new(file_path, InodeTypes::EXT4_INODE_MODE_FILE));
-    let file_size = file_fd.get_file_size(file_path);
+    // let mut file_fd: Box<dyn VfsNodeOps> =
+    //     Box::new(FileWrapper::new(file_path, InodeTypes::EXT4_INODE_MODE_FILE));
+
+    // 使用 root 来查找并打开文件
+    let file_node = root.lookup(file_path).expect("NO such file");
+    file_node.open_file(file_path, O_RDONLY);
+    let file_size = file_node.get_file_size();
     println!("file_size={}",file_size);
-    // let mut read_buf = vec![0; file_size as usize];
-    // // 从文件中读取
-    // file_fd.read_at(0, &mut read_buf).expect("Failed to read from file");
-    //
-    // // 输出读取的数据
-    // println!("read file = {:#x?}", read_buf);
     // 定义块大小
     const CHUNK_SIZE: usize = 4096; // 4KB
     // 用于存储读取的总字节数
@@ -164,7 +142,7 @@ pub fn init_rootfs<T: Transport>(dev: VirtIOBlk<HalImpl, T>) {
         let mut buffer = vec![0u8; bytes_to_read];
 
         // 读取数据
-        match file_fd.read_at(total_read as u64, &mut buffer) {
+        match file_node.read_at(total_read as u64, &mut buffer) {
             Ok(bytes_read) => {
                 // 更新已读取的总字节数
                 total_read += bytes_read;

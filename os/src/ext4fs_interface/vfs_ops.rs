@@ -1,6 +1,7 @@
+use alloc::string::String;
 use alloc::sync::Arc;
 use lwext4_rust::{bindings::ext4_direntry, InodeTypes};
-use crate::ext4fs_interface::ext4fs::OpenFlags;
+use crate::ext4fs_interface::ext4fs::{FileWrapper, OpenFlags};
 
 /// Filesystem operations.
 pub trait VfsOps: Send + Sync {
@@ -30,11 +31,13 @@ pub trait VfsOps: Send + Sync {
 
 /// Node (file/directory) operations.
 pub trait VfsNodeOps: Send + Sync {
-
+    fn get_path(&self)->String{
+        String::from("")
+    }
     fn open_file(&self,path: &str,flag: OpenFlags){
     }
 
-    fn get_file_size(&self,path: &str)->u64{
+    fn get_file_size(&self)->u64{
         0
     }
 
@@ -87,7 +90,7 @@ pub trait VfsNodeOps: Send + Sync {
     /// Lookup the node with given `path` in the directory.
     ///
     /// Return the node if found.
-    fn lookup(self: Arc<Self>, _path: &str) -> Result<usize, i32> {
+    fn lookup(self: Arc<Self>, _path: &str) -> Result<Arc<FileWrapper>, &str> {
         unimplemented!()
     }
 
