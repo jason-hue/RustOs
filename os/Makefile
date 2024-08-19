@@ -39,7 +39,7 @@ user_build:
 	cd ../user/ && make build
 
 build: env $(KERNEL_BIN) fs-img
-		@export PATH=$$PATH:/opt/riscv64-linux-musl-cross/bin;
+	@export PATH=$$PATH:/opt/riscv64-linux-musl-cross/bin;
 
 env:user_build
 	(rustup target list | grep "riscv64gc-unknown-none-elf (installed)") || rustup target add $(TARGET)
