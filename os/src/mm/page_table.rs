@@ -1,12 +1,8 @@
-use super::{frame_alloc, FrameTracker, KERNEL_SPACE, MapPermission, PhysAddr, PhysPageNum, StepByOne, VirtAddr, VirtPageNum};
+use super::{frame_alloc, FrameTracker, PhysAddr, PhysPageNum, StepByOne, VirtAddr, VirtPageNum};
 use alloc::string::String;
-use alloc::sync::Arc;
 use alloc::vec;
 use alloc::vec::Vec;
 use bitflags::*;
-use lazy_static::lazy_static;
-use crate::config::PAGE_SIZE;
-use crate::sync::UPSafeCell;
 
 bitflags! {
     pub struct PTEFlags: u8 {
@@ -198,37 +194,11 @@ pub fn translated_refmut<T>(token: usize, ptr: *mut T) -> &'static mut T {
         .unwrap()
         .get_mut()
 }
-pub fn translated_pa_to_va(token: usize, ptr: *mut usize) -> Option<VirtAddr> {
-    println!("EnterTheAddressTranslationFunction");
-    let pa = PhysAddr::from(ptr as usize);
-    println!("Physical Address: {:#x}", pa.0);
 
-    let ptr_ppn = PhysPageNum::from(pa);
-    println!("Physical Page Number: {:#x}", ptr_ppn.0);
-    let binding = KERNEL_SPACE.exclusive_access();
-    let page_table = binding.get_page_table();
-    println!("PageTable loaded with {} frames",page_table.frames.len());
-    page_table.frames.iter().find_map(|frame| {
-        let ppn = frame.ppn;
-        println!("Checking frame with PPN: {:#x}", ppn.0);
-        if ppn.0 * PAGE_SIZE <= pa.0 && pa.0 < (ppn.0 + 1) * PAGE_SIZE {
-            let offset = pa.0 - ppn.0 * PAGE_SIZE;
-            println!("Offset: {:#x}", offset);
-            Some(VirtAddr(ptr_ppn.0 * PAGE_SIZE + offset))
-        } else {
-            None
-        }
-    })
-}
-pub fn translated_va_to_pa(token: usize, ptr: *mut usize) -> PhysAddr {
-    let page_table = PageTable::from_token(token);
-    let va = VirtAddr::from(ptr as usize);
-    let ppn = page_table.find_pte(VirtPageNum::from(va)).unwrap().ppn();
-    PhysAddr::from(ppn)
-}
 pub struct UserBuffer {
     pub buffers: Vec<&'static mut [u8]>,
 }
+
 impl UserBuffer {
     pub fn new(buffers: Vec<&'static mut [u8]>) -> Self {
         Self { buffers }

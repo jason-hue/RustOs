@@ -19,8 +19,6 @@ sbi-rt = { version = "0.0.2", features = ["legacy"] }
 k210-pac = { path = "../dependencies/k210-pac" }
 k210-hal = { path = "../dependencies/k210-hal" }
 k210-soc = { path = "../dependencies/k210-soc" }
-lwext4_rust = { git = "https://github.com/elliott10/lwext4_rust.git" }
-virtio-drivers-fs = { git = "https://github.com/rcore-os/virtio-drivers.git", package = 'virtio-drivers', rev = "61ece509" }
-device_tree = { git = "https://github.com/rcore-os/device_tree-rs", rev = "2f2e55fb" }
+
 [profile.release]
 debug = true

@@ -5,3 +5,27 @@ target = "riscv64gc-unknown-none-elf"
 rustflags = [
     "-Clink-arg=-Tsrc/linker.ld", "-Cforce-frame-pointers=yes"
 ]
+[source.crates-io]
+replace-with = "vendored-sources"
+
+[source."git+https://github.com/elliott10/lwext4_rust.git"]
+git = "https://github.com/elliott10/lwext4_rust.git"
+replace-with = "vendored-sources"
+
+[source."git+https://github.com/rcore-os/device_tree-rs?rev=2f2e55fb"]
+git = "https://github.com/rcore-os/device_tree-rs"
+rev = "2f2e55fb"
+replace-with = "vendored-sources"
+
+[source."git+https://github.com/rcore-os/virtio-drivers.git?rev=61ece509"]
+git = "https://github.com/rcore-os/virtio-drivers.git"
+rev = "61ece509"
+replace-with = "vendored-sources"
+
+[source."git+https://github.com/rcore-os/virtio-drivers?rev=4ee80e5"]
+git = "https://github.com/rcore-os/virtio-drivers"
+rev = "4ee80e5"
+replace-with = "vendored-sources"
+
+[source.vendored-sources]
+directory = "vendor"

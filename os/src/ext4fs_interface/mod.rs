@@ -1,11 +1,15 @@
 use alloc::boxed::Box;
+use alloc::sync::Arc;
 use alloc::vec;
 use alloc::vec::Vec;
 use device_tree::{DeviceTree, Node};
 use device_tree::util::SliceRead;
+use lazy_static::lazy_static;
 use log::{error, warn};
 use lwext4_rust::bindings::ext4_direntry;
 use lwext4_rust::InodeTypes;
+use spin::lazy::Lazy;
+use spin::RwLock;
 use virtio_drivers_fs::device::blk::VirtIOBlk;
 use virtio_drivers_fs::transport::{DeviceType, Transport};
 use virtio_drivers_fs::transport::mmio::{MmioTransport, VirtIOHeader};
@@ -14,14 +18,14 @@ use crate::ext4fs_interface::ext4fs::{Ext4FileSystem, FileWrapper, OpenFlags};
 use crate::ext4fs_interface::ext4fs::OpenFlags::O_RDONLY;
 use crate::ext4fs_interface::vfs_ops::{VfsNodeOps, VfsOps};
 use crate::ext4fs_interface::virtio_impls::HalImpl;
-use crate::mm::{translated_pa_to_va, translated_va_to_pa};
+use crate::sync::UPSafeCell;
 use crate::task::current_user_token;
 
 mod disk;
 mod ext4fs;
 mod vfs_ops;
 mod virtio_impls;
-pub fn init_dt(dtb: usize) {
+pub fn init_dt(dtb: usize) -> Result<(), &'static str> {
     println!("device tree @ {:#x}", dtb);
     #[repr(C)]
     struct DtbHeader {
@@ -35,10 +39,15 @@ pub fn init_dt(dtb: usize) {
     let size = u32::from_be(header.be_size);
     let dtb_data = unsafe { core::slice::from_raw_parts(dtb as *const u8, size as usize) };
     let dt = DeviceTree::load(dtb_data).expect("failed to parse device tree");
-    walk_dt_node(&dt.root);
+    match walk_dt_node(&dt.root) {
+        Ok(root) => {
+            *ROOT_INODE.write() = Some(root);
+            Ok(())
+        }
+        Err(e) => Err(e),
+    }
 }
-
-fn walk_dt_node(dt: &Node) {
+fn walk_dt_node(dt: &Node) -> Result<Arc<dyn VfsNodeOps>, &'static str> {
     if let Ok(compatible) = dt.prop_str("compatible") {
         if compatible == "pci-host-ecam-generic" || compatible == "sifive,fu740-pcie" {
             if let Some(reg) = dt.prop_raw("reg") {
@@ -57,33 +66,38 @@ fn walk_dt_node(dt: &Node) {
                     ranges[address_cells]..ranges[address_cells + 2 - 1],
                     ranges[address_cells + 2]..ranges[address_cells + 2 + size_cells - 1]
                 );
-
                 println!("{:?} addr={:#x}, size={:#x}", compatible, paddr, size);
-                //pci_scan().unwrap();
             }
-        }
-
-        if compatible == "virtio,mmio" {
+        } else if compatible == "virtio,mmio" {
             if let Some(reg) = dt.prop_raw("reg") {
                 let paddr = reg.as_slice().read_be_u64(0).unwrap_or(0);
                 let size = reg
                     .as_slice()
                     .read_be_u64(2 * core::mem::size_of::<u32>())
                     .unwrap_or(0);
-                virtio_probe(paddr, size);
+                return virtio_probe(paddr, size);
             }
         }
     }
+
     for child in dt.children.iter() {
-        walk_dt_node(child);
+        if let Ok(result) = walk_dt_node(child) {
+            return Ok(result);
+        }
     }
+
+    Err("Compatible device not found")
 }
-fn virtio_probe(paddr: u64, size: u64) {
+
+fn virtio_probe(paddr: u64, size: u64)->Result<Arc<dyn VfsNodeOps>,&'static str> {
     println!("walk dt addr={:#x}, size={:#x}", paddr, size);
     let vaddr = paddr;
     let header = core::ptr::NonNull::new(vaddr as *mut VirtIOHeader).unwrap();
     match unsafe { MmioTransport::new(header) } {
-        Err(e) => warn!("Construct a new VirtIO MMIO transport: {}", e),
+        Err(e) => {
+            warn!("Construct a new VirtIO MMIO transport: {}", e);
+            Err("Construct a new VirtIO MMIO transport")
+        }
         Ok(transport) => {
             println!(
                 "Detected virtio MMIO device with vendor id {:#X}, device type {:?}, version {:?}",
@@ -91,36 +105,49 @@ fn virtio_probe(paddr: u64, size: u64) {
                 transport.device_type(),
                 transport.version(),
             );
-            virtio_device(transport);
+            virtio_device(transport)
         }
     }
 }
-fn virtio_device(transport: impl Transport) {
+fn virtio_device(transport: impl Transport)->Result<Arc<dyn VfsNodeOps>,&'static str>{
     match transport.device_type() {
-        DeviceType::Block => virtio_blk(transport),
-        DeviceType::GPU => println!("VirtIO GPU"),
-        DeviceType::Input => println!("VirtIO Input"),
-        DeviceType::Network => println!("VirtIO Network"),
-        t => error!("Unrecognized virtio device: {:?}", t),
+        DeviceType::Block => Ok(virtio_blk(transport)),
+        t => {
+            error!("Unrecognized virtio device: {:?}", t);
+            Err("Unrecognized virtio device")
+        },
     }
 }
-fn virtio_blk<T: Transport>(transport: T) {
+fn virtio_blk<T: Transport>(transport: T) -> Arc<dyn VfsNodeOps> {
     let mut blk = VirtIOBlk::<HalImpl, T>::new(transport).expect("failed to create blk driver");
-    init_rootfs(blk);
-    println!("virtio-blk test finished");
-}
+    println!("VirtIOBlk driver created successfully");
 
-pub fn init_rootfs<T: Transport>(dev: VirtIOBlk<HalImpl, T>) {
+    let root = init_ext4_fs(blk);
+    println!("Ext4 file system initialized");
+
+    *ROOT_INODE.write() = Some(root.clone());
+    println!("ROOT_INODE set successfully");
+
+    println!("virtio-blk test finished");
+    root.clone()
+
+}
+pub fn init_ext4_fs<T: Transport>(dev: VirtIOBlk<HalImpl, T>) -> Arc<dyn VfsNodeOps> {
     let disk = Disk::new(dev);
     let ext4_fs: Box<dyn VfsOps> = Box::new(Ext4FileSystem::new(disk));
     let root = ext4_fs.root_dir();
-    let file_path = "/sample.txt";
-    // 打开已经存在的文件
-    // let mut file_fd: Box<dyn VfsNodeOps> =
-    //     Box::new(FileWrapper::new(file_path, InodeTypes::EXT4_INODE_MODE_FILE));
+    println!("Root directory initialized.");
+    root
+}
 
+lazy_static! {
+    pub static ref ROOT_INODE: RwLock<Option<Arc<dyn VfsNodeOps>>> = RwLock::new(None);
+}
+pub fn ext4_fs_test(){
+    let file_path = "/sample.txt";
+    let root_inode = ROOT_INODE.read().as_ref().expect("Root inode not initialized").clone();
     // 使用 root 来查找并打开文件
-    let file_node = root.lookup(file_path).expect("NO such file");
+    let file_node = root_inode.lookup(file_path).unwrap();
     file_node.open_file(file_path, O_RDONLY);
     let file_size = file_node.get_file_size();
     println!("file_size={}",file_size);
@@ -180,6 +207,5 @@ pub fn init_rootfs<T: Transport>(dev: VirtIOBlk<HalImpl, T>) {
     if total_buffer.len() % 16 != 0 {
         println!("");
     }
-    drop(ext4_fs);
-}
 
+}

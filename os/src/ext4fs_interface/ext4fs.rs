@@ -264,21 +264,29 @@ impl VfsNodeOps for FileWrapper {
         let file = self.clone();
         println!("lookup ext4fs: {:?}, {}", file.get_path(), path);
         let fpath = self.path_deal_with(path);
+        println!("Processed path: {}", fpath);
+
         let fpath = fpath.as_str();
         if fpath.is_empty() {
+            println!("Path is empty, returning self.");
             return Ok(self.clone());
         }
 
         /////////
         let mut file = self.0.borrow_mut();
+        println!("Checking if directory exists for path: {}", fpath);
         if file.check_inode_exist(fpath, InodeTypes::EXT4_DE_DIR) {
-            debug!("lookup new DIR FileWrapper");
+            println!("Directory found, creating new DIR FileWrapper");
             Ok(Arc::new(Self::new(fpath, InodeTypes::EXT4_DE_DIR)))
-        } else if file.check_inode_exist(fpath, InodeTypes::EXT4_DE_REG_FILE) {
-            debug!("lookup new FILE FileWrapper");
-            Ok(Arc::new(Self::new(fpath, InodeTypes::EXT4_DE_REG_FILE)))
         } else {
-            Err("Not found")
+            println!("Directory not found, checking if file exists for path: {}", fpath);
+            if file.check_inode_exist(fpath, InodeTypes::EXT4_DE_REG_FILE) {
+                println!("File found, creating new FILE FileWrapper");
+                Ok(Arc::new(Self::new(fpath, InodeTypes::EXT4_DE_REG_FILE)))
+            } else {
+                println!("File not found for path: {}", fpath);
+                Err("Not found")
+            }
         }
     }
 

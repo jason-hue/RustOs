@@ -26,12 +26,8 @@ mod syscall;
 mod task;
 mod timer;
 mod trap;
-mod ext4fs_interface;
+
 use core::arch::global_asm;
-use crate::ext4fs_interface::init_dt;
-use crate::mm::{ kernel_token, translated_pa_to_va};
-use crate::sbi::shutdown;
-use crate::task::current_user_token;
 
 global_asm!(include_str!("entry.asm"));
 
@@ -47,8 +43,7 @@ fn clear_bss() {
 }
 
 #[no_mangle]
-pub fn rust_main(device_tree_paddr: usize) -> ! {
-    let dtb_addr = device_tree_paddr;
+pub fn rust_main() -> ! {
     clear_bss();
     println!("[kernel] Hello, world!");
     mm::init();
@@ -56,11 +51,8 @@ pub fn rust_main(device_tree_paddr: usize) -> ! {
     trap::init();
     trap::enable_timer_interrupt();
     timer::set_next_trigger();
-    println!("TDB_addr: {:#x}",dtb_addr);
-    init_dt(dtb_addr);
-    shutdown(false);
-    // fatfs::fs_init();
-    // task::add_initproc();
-    // task::run_tasks();
+    fatfs::fs_init();
+    task::add_initproc();
+    task::run_tasks();
     panic!("Unreachable in rust_main!");
 }
