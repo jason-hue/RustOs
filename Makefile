@@ -26,5 +26,6 @@ clean:
 	cd os && mv .cargo cargo && make clean
 	cd fat32-fuse && cargo clean
 	rm -rf ext4.img
+	rm -rf fat.img
 	rm -rf kernel-qemu
 	rm -rf sbi-qemu

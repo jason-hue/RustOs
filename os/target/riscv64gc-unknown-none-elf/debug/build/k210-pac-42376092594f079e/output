@@ -1,2 +1,0 @@
-cargo:rustc-link-search=/home/knifefire/RustOs/os/target/riscv64gc-unknown-none-elf/debug/build/k210-pac-42376092594f079e/out
-cargo:rerun-if-changed=memory-k210.x

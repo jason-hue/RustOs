@@ -8,7 +8,7 @@ FS_IMG := ../user/target/$(TARGET)/$(MODE)/fs.img
 APPS := ../user/src/bin/*
 
 #FS
-FAT_IMG := ../ext4.img
+FAT_IMG := ../fat.img
 ELF_SRC := ../testsuits/
 SDC := ../SDCard/
 
@@ -39,6 +39,7 @@ user_build:
 	cd ../user/ && make build
 
 build: env $(KERNEL_BIN) fs-img
+		@export PATH=$$PATH:/opt/riscv64-linux-musl-cross/bin;
 
 env:user_build
 	(rustup target list | grep "riscv64gc-unknown-none-elf (installed)") || rustup target add $(TARGET)
@@ -81,8 +82,8 @@ QEMU_ARGS := -machine virt \
 			 -device loader,file=$(KERNEL_BIN),addr=$(KERNEL_ENTRY_PA) \
 			 -drive file=$(FAT_IMG),if=none,format=raw,id=x0 \
 			 -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0 \
-			 -netdev user,id=net0 \
-             -device e1000e,netdev=net0
+#			 -netdev user,id=net0 \
+#             -device e1000e,netdev=net0
 
 run-inner: build
 	@qemu-system-riscv64 $(QEMU_ARGS)
